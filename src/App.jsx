@@ -5,9 +5,8 @@ import PredictionResult from './components/PredictionResult';
 import { loadModel, runInference } from './utils/inference';
 
 function App() {
-  const [prediction, setPrediction] = useState(null);
-  const [confidence, setConfidence] = useState(0);
-  const [modelStatus, setModelStatus] = useState('loading'); // 'loading', 'ready', 'error'
+  const [results, setResults] = useState(null);
+  const [modelStatus, setModelStatus] = useState('loading');
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
@@ -17,37 +16,22 @@ function App() {
         setModelStatus('ready');
       } else {
         setModelStatus('error');
-        setErrorMsg('Failed to load ONNX model. Please ensure model_aksara_aug.onnx is placed in the public/ directory.');
+        setErrorMsg('Gagal memuat model. Pastikan model_aksara_murni.onnx DAN model_aksara_aug.onnx ada di folder public/.');
       }
     };
     initModel();
   }, []);
 
   const handleStrokeEnd = async (canvas) => {
-    // Check if canvas is entirely white (empty)
-    const ctx = canvas.getContext('2d');
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const data = imageData.data;
-    let isEmpty = true;
-    for (let i = 0; i < data.length; i += 4) {
-      if (data[i] !== 255 || data[i+1] !== 255 || data[i+2] !== 255) {
-        isEmpty = false;
-        break;
-      }
-    }
-
-    if (isEmpty) {
-      setPrediction(null);
-      setConfidence(0);
-      return;
-    }
-
+    // Kalau model error/belum siap, goresan kanvas diabaikan
     if (modelStatus !== 'ready') return;
 
-    const result = await runInference(canvas);
-    if (result) {
-      setPrediction(result.character);
-      setConfidence(result.confidence);
+    // Menjalankan inferensi ke 2 model
+    const inferenceResult = await runInference(canvas);
+    
+    // Kalau berhasil, kirim datanya ke UI Result
+    if (inferenceResult) {
+      setResults(inferenceResult);
     }
   };
 
@@ -65,7 +49,6 @@ function App() {
       {/* Main Container */}
       <div className="max-w-6xl mx-auto px-4 py-12 md:py-20 flex flex-col gap-12 lg:gap-16">
         
-        {/* Header */}
         <header className="text-center space-y-6">
           <div className="inline-flex items-center justify-center p-4 bg-white/5 rounded-2xl border border-white/10 mb-2 shadow-2xl relative overflow-hidden group">
             <div className="absolute inset-0 bg-red-500/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
@@ -77,30 +60,25 @@ function App() {
             </span>{' '}
             AI Vision
           </h1>
-          <p className="text-gray-400 max-w-2xl mx-auto text-lg md:text-xl font-light">
-            Real-time Javanese script handwriting recognition powered by ONNX completely in your browser.
-          </p>
         </header>
 
-        {/* Content Layout */}
         <main className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12 items-stretch">
           
-          {/* Left Column: Input */}
           <section className="flex flex-col gap-6">
             <div className="text-center md:text-left pl-2 hidden md:block">
               <h2 className="text-2xl font-bold text-gray-200 mb-2 tracking-wide">Input Canvas</h2>
-              <p className="text-sm text-gray-500">Draw a single character within the box.</p>
+              <p className="text-sm text-gray-500">Gambarlah satu aksara di dalam kotak.</p>
             </div>
             <CanvasBoard onStrokeEnd={handleStrokeEnd} />
           </section>
 
-          {/* Right Column: Output */}
           <section className="flex flex-col gap-6">
             <div className="text-center md:text-left pl-2 hidden md:block">
               <h2 className="text-2xl font-bold text-gray-200 mb-2 tracking-wide">Analysis Result</h2>
-              <p className="text-sm text-gray-500">AI predictions and confidence score.</p>
+              <p className="text-sm text-gray-500">Perbandingan prediksi kedua model.</p>
             </div>
-            <PredictionResult prediction={prediction} confidence={confidence} />
+            {/* INI BAGIAN PALING PENTING: Mengirim variabel 'results' */}
+            <PredictionResult results={results} />
           </section>
 
         </main>
