@@ -1,8 +1,0 @@
-{
-  "rewrites": [
-    {
-      "source": "/proxy/models/:match*",
-      "destination": "https://github.com/ZaidaanRandih/JavaneseScriptProject/releases/download/v1.0/:match*"
-    }
-  ]
-}

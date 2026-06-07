@@ -14,14 +14,14 @@ let sessionAug = null;
 export const loadModel = async () => {
   try {
     // Masukkan link dari Notepad kamu ke sini:
-    const urlMurni = '/proxy/models/model_aksara_murni.onnx';
-    const urlAug = '/proxy/models/model_aksara_aug.onnx';
+    const urlMurni = 'https://huggingface.co/ZaidaanRandih/aksara-jawa-convnext/resolve/main/model_aksara_murni.onnx';
+    const urlAug = 'https://huggingface.co/ZaidaanRandih/aksara-jawa-convnext/resolve/main/model_aksara_aug.onnx';
 
     const [murniRes, augRes] = await Promise.all([
         ort.InferenceSession.create(urlMurni, { executionProviders: ['wasm'] }),
         ort.InferenceSession.create(urlAug, { executionProviders: ['wasm'] })
     ]);
-    
+
     sessionMurni = murniRes;
     sessionAug = augRes;
 
