@@ -10,30 +10,18 @@ const JAVANESE_CHARS = [
 let sessionMurni = null;
 let sessionAug = null;
 
-const fetchModel = async (url) => {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Gagal mendownload model dari ${url}`);
-  }
-  const arrayBuffer = await response.arrayBuffer();
-  return arrayBuffer;
-};
 
 export const loadModel = async () => {
   try {
     // Masukkan link dari Notepad kamu ke sini:
-    const urlMurni = 'https://github.com/ZaidaanRandih/JavaneseScriptProject/releases/download/v1.0/model_aksara_murni.onnx';
-    const urlAug = 'https://github.com/ZaidaanRandih/JavaneseScriptProject/releases/download/v1.0/model_aksara_aug.onnx';
-
-   const [bufferMurni, bufferAug] = await Promise.all([
-        fetchModel(urlMurni),
-        fetchModel(urlAug)
-    ]);
+    const urlMurni = '/proxy/models/model_aksara_murni.onnx';
+    const urlAug = '/proxy/models/model_aksara_aug.onnx';
 
     const [murniRes, augRes] = await Promise.all([
-        ort.InferenceSession.create(bufferMurni, { executionProviders: ['wasm'] }),
-        ort.InferenceSession.create(bufferAug, { executionProviders: ['wasm'] })
-      ]);
+        ort.InferenceSession.create(urlMurni, { executionProviders: ['wasm'] }),
+        ort.InferenceSession.create(urlAug, { executionProviders: ['wasm'] })
+    ]);
+    
     sessionMurni = murniRes;
     sessionAug = augRes;
 
