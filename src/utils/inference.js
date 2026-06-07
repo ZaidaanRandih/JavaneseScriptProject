@@ -1,9 +1,9 @@
 import * as ort from 'onnxruntime-web';
 
 const JAVANESE_CHARS = [
-  "ba", "ca", "da", "dha", "ga", 
-  "ha", "ja", "ka", "la", "ma", 
-  "na", "nga", "nya", "pa", "ra", 
+  "ba", "ca", "da", "dha", "ga",
+  "ha", "ja", "ka", "la", "ma",
+  "na", "nga", "nya", "pa", "ra",
   "sa", "ta", "tha", "wa", "ya"
 ];
 
@@ -12,14 +12,17 @@ let sessionAug = null;
 
 export const loadModel = async () => {
   try {
+    // Masukkan link dari Notepad kamu ke sini:
+    const urlMurni = 'https://github.com/ZaidaanRandih/JavaneseScriptProject/releases/download/v1.0/model_aksara_murni.onnx';
+    const urlAug = 'https://github.com/ZaidaanRandih/JavaneseScriptProject/releases/download/v1.0/model_aksara_aug.onnx';
+
     const [murniRes, augRes] = await Promise.all([
-        ort.InferenceSession.create('/model_aksara_murni.onnx', { executionProviders: ['wasm'] }),
-        ort.InferenceSession.create('/model_aksara_aug.onnx', { executionProviders: ['wasm'] })
+      ort.InferenceSession.create(urlMurni, { executionProviders: ['wasm'] }),
+      ort.InferenceSession.create(urlAug, { executionProviders: ['wasm'] })
     ]);
-    
     sessionMurni = murniRes;
     sessionAug = augRes;
-    
+
     return { success: true };
   } catch (error) {
     console.error('Failed to load ONNX models:', error);
@@ -28,40 +31,40 @@ export const loadModel = async () => {
 };
 
 const runSession = async (session, inputTensor) => {
-    const inputName = session.inputNames[0];
-    const feeds = { [inputName]: inputTensor };
-    const results = await session.run(feeds);
-    
-    const outputNames = session.outputNames;
-    const outputTensor = results[outputNames[0]];
-    const outputData = outputTensor.data;
+  const inputName = session.inputNames[0];
+  const feeds = { [inputName]: inputTensor };
+  const results = await session.run(feeds);
 
-    // Softmax untuk Confidence Score
-    const expData = new Float32Array(outputData.length);
-    let maxLogit = -Infinity;
-    for(let i=0; i<outputData.length; i++) {
-        if(outputData[i] > maxLogit) maxLogit = outputData[i];
-    }
-    let sumExp = 0;
-    for(let i=0; i<outputData.length; i++) {
-        expData[i] = Math.exp(outputData[i] - maxLogit);
-        sumExp += expData[i];
-    }
-    
-    let bestIndex = 0;
-    let bestProb = 0;
-    for(let i=0; i<outputData.length; i++) {
-        const prob = expData[i] / sumExp;
-        if(prob > bestProb) {
-            bestProb = prob;
-            bestIndex = i;
-        }
-    }
+  const outputNames = session.outputNames;
+  const outputTensor = results[outputNames[0]];
+  const outputData = outputTensor.data;
 
-    return {
-        prediction: JAVANESE_CHARS[bestIndex],
-        confidence: bestProb
-    };
+  // Softmax untuk Confidence Score
+  const expData = new Float32Array(outputData.length);
+  let maxLogit = -Infinity;
+  for (let i = 0; i < outputData.length; i++) {
+    if (outputData[i] > maxLogit) maxLogit = outputData[i];
+  }
+  let sumExp = 0;
+  for (let i = 0; i < outputData.length; i++) {
+    expData[i] = Math.exp(outputData[i] - maxLogit);
+    sumExp += expData[i];
+  }
+
+  let bestIndex = 0;
+  let bestProb = 0;
+  for (let i = 0; i < outputData.length; i++) {
+    const prob = expData[i] / sumExp;
+    if (prob > bestProb) {
+      bestProb = prob;
+      bestIndex = i;
+    }
+  }
+
+  return {
+    prediction: JAVANESE_CHARS[bestIndex],
+    confidence: bestProb
+  };
 }
 
 export const runInference = async (visibleCanvas) => {
@@ -78,7 +81,7 @@ export const runInference = async (visibleCanvas) => {
 
   const imageData = ctx.getImageData(0, 0, 224, 224);
   const data = imageData.data;
-  
+
   const tensorArray = new Float32Array(3 * 224 * 224);
 
   for (let i = 0; i < 224 * 224; i++) {
@@ -89,9 +92,9 @@ export const runInference = async (visibleCanvas) => {
     let gray = (r + g + b) / 3.0 / 255.0;
     gray = 1.0 - gray;
 
-    tensorArray[i] = gray;                       
-    tensorArray[224 * 224 + i] = gray;           
-    tensorArray[2 * 224 * 224 + i] = gray;       
+    tensorArray[i] = gray;
+    tensorArray[224 * 224 + i] = gray;
+    tensorArray[2 * 224 * 224 + i] = gray;
   }
 
   const inputTensor = new ort.Tensor('float32', tensorArray, [1, 3, 224, 224]);
@@ -102,8 +105,8 @@ export const runInference = async (visibleCanvas) => {
     const hasilAug = await runSession(sessionAug, inputTensor);
 
     return {
-        murni: hasilMurni,
-        aug: hasilAug
+      murni: hasilMurni,
+      aug: hasilAug
     };
 
   } catch (error) {
