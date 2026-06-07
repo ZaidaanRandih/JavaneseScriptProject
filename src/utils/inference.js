@@ -1,30 +1,46 @@
 import * as ort from 'onnxruntime-web';
 
 const JAVANESE_CHARS = [
-  "ba", "ca", "da", "dha", "ga",
-  "ha", "ja", "ka", "la", "ma",
-  "na", "nga", "nya", "pa", "ra",
+  "ba", "ca", "da", "dha", "ga", 
+  "ha", "ja", "ka", "la", "ma", 
+  "na", "nga", "nya", "pa", "ra", 
   "sa", "ta", "tha", "wa", "ya"
 ];
 
 let sessionMurni = null;
 let sessionAug = null;
 
+// Helper fetch agar kita bisa melacak progress downloadnya
+const fetchModel = async (url, name) => {
+  console.log(`[1] Memulai download ${name} dari Hugging Face...`);
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Gagal download ${name}`);
+  const buffer = await response.arrayBuffer();
+  console.log(`[2] ${name} BERHASIL didownload! Ukuran: ${(buffer.byteLength / 1024 / 1024).toFixed(2)} MB`);
+  return buffer;
+};
 
 export const loadModel = async () => {
   try {
-    // Masukkan link dari Notepad kamu ke sini:
     const urlMurni = 'https://huggingface.co/ZaidaanRandih/aksara-jawa-convnext/resolve/main/model_aksara_murni.onnx';
     const urlAug = 'https://huggingface.co/ZaidaanRandih/aksara-jawa-convnext/resolve/main/model_aksara_aug.onnx';
 
-    const [murniRes, augRes] = await Promise.all([
-        ort.InferenceSession.create(urlMurni, { executionProviders: ['wasm'] }),
-        ort.InferenceSession.create(urlAug, { executionProviders: ['wasm'] })
+    // Download file secara paralel
+    const [bufferMurni, bufferAug] = await Promise.all([
+        fetchModel(urlMurni, "Model Murni"),
+        fetchModel(urlAug, "Model Augmented")
     ]);
 
+    console.log("[3] Membangun sesi AI (WebAssembly)...");
+    const [murniRes, augRes] = await Promise.all([
+        ort.InferenceSession.create(bufferMurni, { executionProviders: ['wasm'] }),
+        ort.InferenceSession.create(bufferAug, { executionProviders: ['wasm'] })
+    ]);
+    
     sessionMurni = murniRes;
     sessionAug = augRes;
-
+    
+    console.log("[4] MODEL AI SIAP DIGUNAKAN! Silakan menggambar.");
     return { success: true };
   } catch (error) {
     console.error('Failed to load ONNX models:', error);
@@ -33,40 +49,40 @@ export const loadModel = async () => {
 };
 
 const runSession = async (session, inputTensor) => {
-  const inputName = session.inputNames[0];
-  const feeds = { [inputName]: inputTensor };
-  const results = await session.run(feeds);
+    const inputName = session.inputNames[0];
+    const feeds = { [inputName]: inputTensor };
+    const results = await session.run(feeds);
+    
+    const outputNames = session.outputNames;
+    const outputTensor = results[outputNames[0]];
+    const outputData = outputTensor.data;
 
-  const outputNames = session.outputNames;
-  const outputTensor = results[outputNames[0]];
-  const outputData = outputTensor.data;
-
-  // Softmax untuk Confidence Score
-  const expData = new Float32Array(outputData.length);
-  let maxLogit = -Infinity;
-  for (let i = 0; i < outputData.length; i++) {
-    if (outputData[i] > maxLogit) maxLogit = outputData[i];
-  }
-  let sumExp = 0;
-  for (let i = 0; i < outputData.length; i++) {
-    expData[i] = Math.exp(outputData[i] - maxLogit);
-    sumExp += expData[i];
-  }
-
-  let bestIndex = 0;
-  let bestProb = 0;
-  for (let i = 0; i < outputData.length; i++) {
-    const prob = expData[i] / sumExp;
-    if (prob > bestProb) {
-      bestProb = prob;
-      bestIndex = i;
+    // Hitung Softmax manual
+    const expData = new Float32Array(outputData.length);
+    let maxLogit = -Infinity;
+    for(let i=0; i<outputData.length; i++) {
+        if(outputData[i] > maxLogit) maxLogit = outputData[i];
     }
-  }
+    let sumExp = 0;
+    for(let i=0; i<outputData.length; i++) {
+        expData[i] = Math.exp(outputData[i] - maxLogit);
+        sumExp += expData[i];
+    }
+    
+    let bestIndex = 0;
+    let bestProb = 0;
+    for(let i=0; i<outputData.length; i++) {
+        const prob = expData[i] / sumExp;
+        if(prob > bestProb) {
+            bestProb = prob;
+            bestIndex = i;
+        }
+    }
 
-  return {
-    prediction: JAVANESE_CHARS[bestIndex],
-    confidence: bestProb
-  };
+    return {
+        prediction: JAVANESE_CHARS[bestIndex],
+        confidence: bestProb
+    };
 }
 
 export const runInference = async (visibleCanvas) => {
@@ -83,7 +99,7 @@ export const runInference = async (visibleCanvas) => {
 
   const imageData = ctx.getImageData(0, 0, 224, 224);
   const data = imageData.data;
-
+  
   const tensorArray = new Float32Array(3 * 224 * 224);
 
   for (let i = 0; i < 224 * 224; i++) {
@@ -94,23 +110,25 @@ export const runInference = async (visibleCanvas) => {
     let gray = (r + g + b) / 3.0 / 255.0;
     gray = 1.0 - gray;
 
-    tensorArray[i] = gray;
-    tensorArray[224 * 224 + i] = gray;
-    tensorArray[2 * 224 * 224 + i] = gray;
+    tensorArray[i] = gray;                       
+    tensorArray[224 * 224 + i] = gray;           
+    tensorArray[2 * 224 * 224 + i] = gray;       
   }
 
   const inputTensor = new ort.Tensor('float32', tensorArray, [1, 3, 224, 224]);
 
   try {
-    // Jalankan model satu per satu agar engine WASM tidak tabrakan
+    console.log("Menjalankan prediksi...");
+    
+    // PENTING: Dijalankan SATU PER SATU agar sistem WebAssembly tidak tabrakan
     const hasilMurni = await runSession(sessionMurni, inputTensor);
     const hasilAug = await runSession(sessionAug, inputTensor);
-
+    
+    console.log("Prediksi selesai!");
     return {
-      murni: hasilMurni,
-      aug: hasilAug
+        murni: hasilMurni,
+        aug: hasilAug
     };
-
   } catch (error) {
     console.error("Gagal melakukan inferensi:", error);
     return null;

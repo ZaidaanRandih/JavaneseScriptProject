@@ -16,20 +16,37 @@ function App() {
         setModelStatus('ready');
       } else {
         setModelStatus('error');
-        setErrorMsg('Gagal memuat model. Pastikan model_aksara_murni.onnx DAN model_aksara_aug.onnx ada di folder public/.');
+        setErrorMsg('Gagal memuat model dari Hugging Face.');
       }
     };
     initModel();
   }, []);
 
   const handleStrokeEnd = async (canvas) => {
-    // Kalau model error/belum siap, goresan kanvas diabaikan
+    const ctx = canvas.getContext('2d');
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    let isEmpty = true;
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i] !== 255 || data[i+1] !== 255 || data[i+2] !== 255) {
+        isEmpty = false;
+        break;
+      }
+    }
+
+    if (isEmpty) {
+      setResults(null);
+      return;
+    }
+
+    // Beritahu di console kalau kamu gambar sebelum loading selesai
+    if (modelStatus === 'loading') {
+      console.warn("Harap tunggu, model masih di-download! Goresan diabaikan.");
+      return;
+    }
     if (modelStatus !== 'ready') return;
 
-    // Menjalankan inferensi ke 2 model
     const inferenceResult = await runInference(canvas);
-    
-    // Kalau berhasil, kirim datanya ke UI Result
     if (inferenceResult) {
       setResults(inferenceResult);
     }
@@ -38,6 +55,14 @@ function App() {
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-[#f3f4f6] font-sans selection:bg-red-500/30 relative">
       
+      {/* Toast Notification for LOADING */}
+      {modelStatus === 'loading' && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 bg-cyan-950/90 border border-cyan-500/50 text-cyan-200 px-6 py-4 rounded-xl backdrop-blur-md shadow-[0_0_30px_rgba(6,182,212,0.3)] w-[90%] max-w-lg">
+          <div className="w-5 h-5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin flex-shrink-0"></div>
+          <p className="text-sm font-medium leading-relaxed">Mendownload Model AI (±52 MB)... Mohon tunggu sebentar.</p>
+        </div>
+      )}
+
       {/* Toast Notification for Error */}
       {modelStatus === 'error' && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-red-950/90 border border-red-500/50 text-red-200 px-6 py-4 rounded-xl backdrop-blur-md shadow-[0_0_30px_rgba(244,67,54,0.3)] w-[90%] max-w-lg">
@@ -77,7 +102,6 @@ function App() {
               <h2 className="text-2xl font-bold text-gray-200 mb-2 tracking-wide">Analysis Result</h2>
               <p className="text-sm text-gray-500">Perbandingan prediksi kedua model.</p>
             </div>
-            {/* INI BAGIAN PALING PENTING: Mengirim variabel 'results' */}
             <PredictionResult results={results} />
           </section>
 
